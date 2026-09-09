@@ -152,6 +152,7 @@ UPROGS=\
 	$U/_sync\
 	$U/_test_wait\
 	$U/_test_sum\
+	$U/_pipe_wc\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
