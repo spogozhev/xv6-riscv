@@ -7,6 +7,8 @@
 #include "proc.h"
 #include "vm.h"
 
+#include "syscall.h"
+
 uint64
 sys_exit(void)
 {
@@ -109,4 +111,58 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+extern struct proc proc[NPROC];
+
+uint64
+sys_ps_listinfo(void)
+{
+  uint64 plist_ptr;
+  int lim;
+
+  argaddr(0, &plist_ptr);
+  argint(1, &lim);
+
+  if(plist_ptr == 0 || lim < 0)
+    return -1;
+
+  struct proc *p;
+  int count = 0;
+  struct procinfo info;
+
+  // В стандартном xv6 (6.S081) глобального wait_lock нет.
+  // Мы блокируем каждый процесс по отдельности.
+  for(int i = 0; i < NPROC; i++) {
+    p = &proc[i];
+    acquire(&p->lock);
+    
+    if(p->state != UNUSED && p->state != USED) {
+      info.pid = p->pid;
+      info.state = p->state;
+      
+      // В 6.S081 p->parent меняется только при удержании p->lock,
+      // поэтому чтение p->parent->pid здесь абсолютно безопасно.
+      info.ppid = p->parent ? p->parent->pid : 0; 
+      
+      safestrcpy(info.name, p->name, sizeof(info.name));
+
+      if(count < lim) {
+        // 1. pagetable (таблица страниц)
+        // 2. psz (размер страницы, PGSIZE)
+        // 3. dstva (виртуальный адрес назначения)
+        // 4. src (указатель на данные в ядре)
+        // 5. len (количество байт)
+        if(copyout(myproc()->pagetable, PGSIZE, plist_ptr + count * sizeof(struct procinfo), (char*)&info, sizeof(info)) < 0) {
+          release(&p->lock);
+          return -1; // Ошибка: адрес в пользовательском пространстве недоступен
+        }
+      }
+      count++;
+    }
+    
+    release(&p->lock);
+  }
+
+  return count;
 }
