@@ -12,6 +12,7 @@
 #include "file.h"
 #include "stat.h"
 #include "proc.h"
+#include "mutex.h"
 
 struct devsw devsw[NDEV];
 struct {
@@ -60,6 +61,16 @@ void
 fileclose(struct file *f)
 {
   struct file ff;
+  struct proc *p = myproc();
+
+  // Мьютекс: если закрывающий дескриптор процесс владеет мьютексом,
+  // сначала освобождаем его, чтобы не остался захваченным навечно.
+  // (Это не последнее закрытие - объект уничтожит тот, кто закроет
+  // последнюю ссылку.)
+  if(f->type == FD_MUTEX && p != 0 && f->mutex->owner == p->pid){
+    f->mutex->owner = 0;
+    releasesleep(&f->mutex->lk);
+  }
 
   acquire(&ftable.lock);
   if (f->ref < 1)
@@ -79,6 +90,11 @@ fileclose(struct file *f)
     begin_op();
     iput(ff.ip);
     end_op();
+  } else if (ff.type == FD_MUTEX) {
+    // Последняя ссылка закрыта - уничтожаем мьютекс.
+    // Используем копию ff: структура f уже могла быть переиспользована
+    // другим процессом через filealloc.
+    mutexclose(ff.mutex);
   }
 }
 
@@ -113,6 +129,8 @@ fileread(struct file *f, uint64 addr, int n)
 
   if (f->type == FD_PIPE) {
     r = piperead(f->pipe, addr, n);
+  } else if(f->type == FD_MUTEX) {
+    return -1; // Мьютекс не поддерживает чтение
   } else if (f->type == FD_DEVICE) {
     if (f->major < 0 || f->major >= NDEV || !devsw[f->major].read)
       return -1;
@@ -141,6 +159,8 @@ filewrite(struct file *f, uint64 addr, int n)
 
   if (f->type == FD_PIPE) {
     ret = pipewrite(f->pipe, addr, n);
+  } else if(f->type == FD_MUTEX) {
+    return -1; // Мьютекс не поддерживает запись
   } else if (f->type == FD_DEVICE) {
     if (f->major < 0 || f->major >= NDEV || !devsw[f->major].write)
       return -1;

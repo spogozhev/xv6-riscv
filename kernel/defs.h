@@ -3,6 +3,7 @@ struct buf;
 struct context;
 struct file;
 struct inode;
+struct mutex_obj;
 struct pipe;
 struct proc;
 struct spinlock;
@@ -34,6 +35,14 @@ void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
+
+// mutex.c
+struct file*    mutexalloc(void);
+void            mutexclose(struct mutex_obj*);
+
+// sysfile.c
+int             argfd(int, int *, struct file **);
+int             fdalloc(struct file*);
 
 // fs.c
 void            fsinit(int);

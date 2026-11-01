@@ -18,7 +18,8 @@
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
-static int
+// Non-static: также используются в sysmutex.c (прототипы в defs.h).
+int
 argfd(int n, int *pfd, struct file **pf)
 {
   int fd;
@@ -36,7 +37,7 @@ argfd(int n, int *pfd, struct file **pf)
 
 // Allocate a file descriptor for the given file.
 // Takes over file reference from caller on success.
-static int
+int
 fdalloc(struct file *f)
 {
   int fd;
